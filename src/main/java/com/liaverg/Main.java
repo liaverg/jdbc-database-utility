@@ -2,8 +2,8 @@ package com.liaverg;
 
 import org.postgresql.ds.PGSimpleDataSource;
 
-import javax.sql.DataSource;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 
 public class Main {
     private static final String DB_URL = "jdbc:postgresql://localhost:5432/mydb";
@@ -23,9 +23,10 @@ public class Main {
                 insertStmt.setString(1, "john_doe");
                 insertStmt.setString(2, "john.doe@example.com");
                 insertStmt.executeUpdate();
+                insertStmt.setString(1, "jane_doe");
+                insertStmt.setString(2, "jane.doe@example.com");
+                insertStmt.executeUpdate();
             }
         };
-
-        DbUtils.executeStatements(insertData);
     }
 }
