@@ -5,6 +5,8 @@ import org.postgresql.ds.PGSimpleDataSource;
 
 import javax.sql.DataSource;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.HashSet;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -38,6 +40,35 @@ public class TestDbUtils {
         }
     };
 
+    private static final DbUtils.ConnectionFunction selectData = conn -> {
+        String selectSQL = "SELECT username, email FROM users_directory.users";
+        try (PreparedStatement selectStmt = conn.prepareStatement(selectSQL)) {
+            try (ResultSet resultSet = selectStmt.executeQuery()) {
+                HashSet<String []> usersSet= new HashSet<>();
+                while (resultSet.next()) {
+                    String username = resultSet.getString("username");
+                    String email = resultSet.getString("email");
+                    usersSet.add(new String[]{username, email});
+                }
+                return usersSet;
+            }
+        }
+    };
+    private static final DbUtils.ConnectionFunction failedSelectData = conn -> {
+        String selectSQL = "SELECT username, email FROM users_directory.users";
+        try (PreparedStatement selectStmt = conn.prepareStatement(selectSQL)) {
+            try (ResultSet resultSet = selectStmt.executeQuery()) {
+                HashSet<String []> usersSet= new HashSet<>();
+                while (resultSet.next()) {
+                    String username = resultSet.getString("");
+                    String email = resultSet.getString("email");
+                    usersSet.add(new String[]{username, email});
+                }
+                return usersSet;
+            }
+        }
+    };
+
     @BeforeAll
     public static void setUp() {
         PGSimpleDataSource pg_dataSource = new PGSimpleDataSource();
@@ -55,7 +86,8 @@ public class TestDbUtils {
 
     @Test
     void testExecuteStatements_InvalidStatement(){
-        RuntimeException thrownException = assertThrows(RuntimeException.class, () -> DbUtils.executeStatements(failedInsertData));
+        RuntimeException thrownException = assertThrows(RuntimeException.class, () ->
+                                                        DbUtils.executeStatements(failedInsertData));
         assertEquals("error during statement execution", thrownException.getMessage());
     }
 
@@ -66,9 +98,20 @@ public class TestDbUtils {
 
     @Test
     void testExecuteStatementsInTransaction_InvalidStatement(){
-        RuntimeException thrownException = assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransaction(failedInsertData));
+        RuntimeException thrownException = assertThrows(RuntimeException.class, () ->
+                                                        DbUtils.executeStatementsInTransaction(failedInsertData));
         assertEquals("error during statement execution", thrownException.getMessage());
     }
 
+    @Test
+    void testExecuteStatementsInTransactionWithResult_HappyDayScenario(){
+        assertDoesNotThrow (() -> DbUtils.executeStatementsInTransactionWithResult(selectData));
+    }
 
+    @Test
+    void testExecuteStatementsInTransactionWithResult_InvalidStatement(){
+        RuntimeException thrownException = assertThrows(RuntimeException.class, () ->
+                                                        DbUtils.executeStatementsInTransactionWithResult(failedSelectData));
+        assertEquals("error during statement execution", thrownException.getMessage());
+    }
 }
