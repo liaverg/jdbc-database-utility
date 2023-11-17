@@ -41,6 +41,7 @@ public class Main {
     public static void main(String[] args) {
         DataSourceProvider dataSourceProvider = new DataSourceProvider(DB_URL, USER, PASSWORD);
         DbUtils.setDataSource(dataSourceProvider.createDataSource());
+        DbUtils.initializeSchema();
 
         DbUtils.executeStatements(insertData);
         DbUtils.executeStatementsInTransaction(insertData);

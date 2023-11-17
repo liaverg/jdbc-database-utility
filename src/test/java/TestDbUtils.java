@@ -4,7 +4,6 @@ import com.liaverg.DbUtils.ConnectionConsumer;
 import com.liaverg.DbUtils.ConnectionFunction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.postgresql.ds.PGSimpleDataSource;
 
 import javax.sql.DataSource;
 import java.sql.PreparedStatement;
@@ -75,6 +74,7 @@ public class TestDbUtils {
     public static void setUp() {
         DataSourceProvider dataSourceProvider = new DataSourceProvider(DB_URL, USER, PASSWORD);
         DbUtils.setDataSource(dataSourceProvider.createDataSource());
+        DbUtils.initializeSchema();
     }
 
     @Test

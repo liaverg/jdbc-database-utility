@@ -1,17 +1,19 @@
 package com.liaverg;
 
 import javax.sql.DataSource;
-import javax.inject.Inject;
+import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+import org.apache.ibatis.io.Resources;
+import org.apache.ibatis.jdbc.ScriptRunner;
+
+
 public class DbUtils {
-
     private static DataSource dataSource;
-
-    public static void setDataSource(DataSource dataSource) {
-        DbUtils.dataSource = dataSource;
-    }
+    private static final String SCHEMA = "schema.sql";
 
     @FunctionalInterface
     public interface ConnectionConsumer {
@@ -21,6 +23,24 @@ public class DbUtils {
     @FunctionalInterface
     public interface ConnectionFunction<T> {
         T apply(Connection connection) throws SQLException;
+    }
+
+    public static void setDataSource(DataSource dataSource) {
+        DbUtils.dataSource = dataSource;
+    }
+
+    public static void initializeSchema() {
+        try (Connection connection = dataSource.getConnection()) {
+            ScriptRunner scriptRunner = new ScriptRunner(connection);
+            scriptRunner.setDelimiter(";");
+            try (Reader scriptReader = Resources.getResourceAsReader(SCHEMA)) {
+                scriptRunner.runScript(scriptReader);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("error during database connection", e);
+        }
     }
 
     public static void executeStatements(ConnectionConsumer consumer) {
