@@ -9,8 +9,7 @@ public class DbUtils {
 
     private static DataSource dataSource;
 
-    @Inject
-    public DbUtils(DataSource dataSource) {
+    public static void setDataSource(DataSource dataSource) {
         DbUtils.dataSource = dataSource;
     }
 

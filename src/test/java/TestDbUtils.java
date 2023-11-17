@@ -1,4 +1,6 @@
 import com.liaverg.DbUtils;
+import com.liaverg.DbUtils.ConnectionConsumer;
+import com.liaverg.DbUtils.ConnectionFunction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
@@ -16,7 +18,7 @@ public class TestDbUtils {
     private static final String USER = "postgres";
     private static final String PASSWORD = "root";
 
-    private static final DbUtils.ConnectionConsumer successfulInsertData = conn -> {
+    private static final ConnectionConsumer successfulInsertData = conn -> {
         String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
         try (PreparedStatement insertStmt = conn.prepareStatement(insertSQL)) {
             insertStmt.setString(1, "john_doe");
@@ -27,8 +29,7 @@ public class TestDbUtils {
             insertStmt.executeUpdate();
         }
     };
-
-    private static final DbUtils.ConnectionConsumer failedInsertData = conn -> {
+    private static final ConnectionConsumer failedInsertData = conn -> {
         String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
         try (PreparedStatement insertStmt = conn.prepareStatement(insertSQL)) {
             insertStmt.setString(1, "john_doe");
@@ -40,7 +41,7 @@ public class TestDbUtils {
         }
     };
 
-    private static final DbUtils.ConnectionFunction selectData = conn -> {
+    private static final ConnectionFunction selectData = conn -> {
         String selectSQL = "SELECT username, email FROM users_directory.users";
         try (PreparedStatement selectStmt = conn.prepareStatement(selectSQL)) {
             try (ResultSet resultSet = selectStmt.executeQuery()) {
@@ -54,7 +55,7 @@ public class TestDbUtils {
             }
         }
     };
-    private static final DbUtils.ConnectionFunction failedSelectData = conn -> {
+    private static final ConnectionFunction failedSelectData = conn -> {
         String selectSQL = "SELECT username, email FROM users_directory.users";
         try (PreparedStatement selectStmt = conn.prepareStatement(selectSQL)) {
             try (ResultSet resultSet = selectStmt.executeQuery()) {
@@ -76,7 +77,7 @@ public class TestDbUtils {
         pg_dataSource.setUser(USER);
         pg_dataSource.setPassword(PASSWORD);
         DataSource dataSource = pg_dataSource;
-        DbUtils dbUtils = new DbUtils(dataSource);
+        DbUtils.setDataSource(dataSource);
     }
 
     @Test
