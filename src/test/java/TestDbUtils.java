@@ -1,3 +1,4 @@
+import com.liaverg.DataSourceProvider;
 import com.liaverg.DbUtils;
 import com.liaverg.DbUtils.ConnectionConsumer;
 import com.liaverg.DbUtils.ConnectionFunction;
@@ -72,12 +73,8 @@ public class TestDbUtils {
 
     @BeforeAll
     public static void setUp() {
-        PGSimpleDataSource pg_dataSource = new PGSimpleDataSource();
-        pg_dataSource.setURL(DB_URL);
-        pg_dataSource.setUser(USER);
-        pg_dataSource.setPassword(PASSWORD);
-        DataSource dataSource = pg_dataSource;
-        DbUtils.setDataSource(dataSource);
+        DataSourceProvider dataSourceProvider = new DataSourceProvider(DB_URL, USER, PASSWORD);
+        DbUtils.setDataSource(dataSourceProvider.createDataSource());
     }
 
     @Test

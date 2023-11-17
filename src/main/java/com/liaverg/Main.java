@@ -2,7 +2,6 @@ package com.liaverg;
 
 import com.liaverg.DbUtils.ConnectionConsumer;
 import com.liaverg.DbUtils.ConnectionFunction;
-import org.postgresql.ds.PGSimpleDataSource;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,7 +23,6 @@ public class Main {
             insertStmt.executeUpdate();
         }
     };
-
     private static final ConnectionFunction selectData = conn -> {
         String selectSQL = "SELECT username, email FROM users_directory.users";
         try (PreparedStatement selectStmt = conn.prepareStatement(selectSQL)) {
@@ -41,11 +39,8 @@ public class Main {
     };
 
     public static void main(String[] args) {
-        PGSimpleDataSource pg_dataSource = new PGSimpleDataSource();
-        pg_dataSource.setURL(DB_URL);
-        pg_dataSource.setUser(USER);
-        pg_dataSource.setPassword(PASSWORD);
-        DbUtils.setDataSource(pg_dataSource);
+        DataSourceProvider dataSourceProvider = new DataSourceProvider(DB_URL, USER, PASSWORD);
+        DbUtils.setDataSource(dataSourceProvider.createDataSource());
 
         DbUtils.executeStatements(insertData);
         DbUtils.executeStatementsInTransaction(insertData);
