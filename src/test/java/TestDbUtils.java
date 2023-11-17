@@ -5,7 +5,6 @@ import com.liaverg.DbUtils.ConnectionFunction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import javax.sql.DataSource;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.HashSet;

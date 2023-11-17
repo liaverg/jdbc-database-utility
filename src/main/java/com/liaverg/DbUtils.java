@@ -1,7 +1,6 @@
 package com.liaverg;
 
 import javax.sql.DataSource;
-import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.sql.Connection;
@@ -77,7 +76,7 @@ public class DbUtils {
     }
 
     public static <T> T executeStatementsInTransactionWithResult(ConnectionFunction<T> consumer) {
-        T result = null;
+        T result;
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             try {
