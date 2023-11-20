@@ -14,19 +14,33 @@ public class Main {
 
     private static final ConnectionConsumer insertData = conn -> {
         String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
-        try (PreparedStatement insertStmt = conn.prepareStatement(insertSQL)) {
-            insertStmt.setString(1, "john_doe");
-            insertStmt.setString(2, "john.doe@example.com");
-            insertStmt.executeUpdate();
-            insertStmt.setString(1, "jane_doe");
-            insertStmt.setString(2, "jane.doe@example.com");
-            insertStmt.executeUpdate();
+        try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
+            insertStatement.setString(1, "john_doe");
+            insertStatement.setString(2, "john.doe@example.com");
+            insertStatement.executeUpdate();
+            insertStatement.setString(1, "jane_doe");
+            insertStatement.setString(2, "jane.doe@example.com");
+            insertStatement.executeUpdate();
         }
     };
+
+    private static final ConnectionFunction updateData = conn -> {
+        String updateSQL = "UPDATE users_directory.users SET email = ? WHERE username = ?";
+        try (PreparedStatement updateStatement = conn.prepareStatement(updateSQL)) {
+            updateStatement.setString(1, "john.doe@gmail.com");
+            updateStatement.setString(2, "john_doe");
+            int updateCount = updateStatement.executeUpdate();
+            updateStatement.setString(1, "jane.doe@gmail.com");
+            updateStatement.setString(2, "jane_doe");
+            updateCount += updateStatement.executeUpdate();
+            return updateCount;
+        }
+    };
+
     private static final ConnectionFunction selectData = conn -> {
         String selectSQL = "SELECT username, email FROM users_directory.users";
-        try (PreparedStatement selectStmt = conn.prepareStatement(selectSQL)) {
-            try (ResultSet resultSet = selectStmt.executeQuery()) {
+        try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
+            try (ResultSet resultSet = selectStatement.executeQuery()) {
                 HashSet<String []> usersSet= new HashSet<>();
                 while (resultSet.next()) {
                     String username = resultSet.getString("username");
@@ -45,8 +59,10 @@ public class Main {
 
         DbUtils.executeStatements(insertData);
         DbUtils.executeStatementsInTransaction(insertData);
-        HashSet<String []> usersSet = (HashSet<String[]>) DbUtils.executeStatementsInTransactionWithResult(selectData);
-        for (String [] userInfo: usersSet){
+        Object updatedRowsCount = DbUtils.executeStatementsInTransactionWithResult(updateData);
+        System.out.println("Number of Statements Updated: " + updatedRowsCount);
+        Object usersSet = DbUtils.executeStatementsInTransactionWithResult(selectData);
+        for (String [] userInfo: (HashSet<String[]>) usersSet){
             System.out.println("Username: " + userInfo[0] + "\tEmail: " + userInfo[1]);
         }
     }

@@ -28,6 +28,10 @@ public class DbUtils {
         DbUtils.dataSource = dataSource;
     }
 
+    public static DataSource getDataSource() {
+        return dataSource;
+    }
+
     public static void initializeSchema() {
         try (Connection connection = dataSource.getConnection()) {
             ScriptRunner scriptRunner = new ScriptRunner(connection);
