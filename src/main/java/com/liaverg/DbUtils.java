@@ -1,15 +1,14 @@
 package com.liaverg;
 
+
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
+
 import javax.sql.DataSource;
-import java.io.IOException;
-import java.io.Reader;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-
-import org.apache.ibatis.io.Resources;
-import org.apache.ibatis.jdbc.ScriptRunner;
 
 
 public class DbUtils {
@@ -17,7 +16,6 @@ public class DbUtils {
     private static final ThreadLocal<Integer> transactionDepth = ThreadLocal.withInitial(() -> -1);
     private static final ThreadLocal<Boolean> isTransactionSuccessful = new ThreadLocal<>();
     private static Connection connection = null;
-    private static final String SCHEMA = "schema.sql";
 
     @FunctionalInterface
     public interface ConnectionConsumer {
@@ -37,15 +35,10 @@ public class DbUtils {
         return dataSource;
     }
 
+
     public static void initializeSchema() {
         try (Connection connection = dataSource.getConnection()) {
-            ScriptRunner scriptRunner = new ScriptRunner(connection);
-            scriptRunner.setDelimiter(";");
-            try (Reader scriptReader = Resources.getResourceAsReader(SCHEMA)) {
-                scriptRunner.runScript(scriptReader);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            ScriptUtils.executeSqlScript(connection, new FileSystemResource("src/main/resources/schema.sql"));
         } catch (SQLException e) {
             throw new RuntimeException("error during database connection", e);
         }
@@ -124,17 +117,5 @@ public class DbUtils {
             }
         }
         transactionDepth.set(transactionDepth.get() - 1);
-    }
-
-    private static void printConnections(Connection connection){
-        try (PreparedStatement pgActiveStatement = connection.prepareStatement("SELECT * FROM pg_stat_activity WHERE state = 'active'")) {
-            try (ResultSet resultSet = pgActiveStatement.executeQuery()) {
-                while (resultSet.next()) {
-                    System.out.println(resultSet.getString("datname") + ' ' + resultSet.getString("pid"));
-                }
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
     }
 }
