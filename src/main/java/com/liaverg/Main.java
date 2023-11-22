@@ -5,13 +5,10 @@ import com.liaverg.DbUtils.ConnectionFunction;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.HashSet;
 
 public class Main {
-    private static final String DB_URL = "jdbc:postgresql://localhost:5432/mydb";
-    private static final String USER = "postgres";
-    private static final String PASSWORD = "root";
-
     private static final ConnectionConsumer insertData = conn -> {
         String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
         try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
@@ -21,6 +18,17 @@ public class Main {
             insertStatement.setString(1, "jane_doe");
             insertStatement.setString(2, "jane.doe@example.com");
             insertStatement.executeUpdate();
+        }
+    };
+
+    private static final ConnectionConsumer insertDataWithNestedTransaction = conn -> {
+        DbUtils.executeStatementsInTransaction(insertData);
+        String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
+        try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
+            insertStatement.setString(1, "jake_doe");
+            insertStatement.setString(2, "jake.doe@example.com");
+            insertStatement.executeUpdate();
+            //throw new SQLException("Simulated exception during statement execution");
         }
     };
 
@@ -53,14 +61,15 @@ public class Main {
     };
 
     public static void main(String[] args) {
-        DataSourceProvider dataSourceProvider = new DataSourceProvider(DB_URL, USER, PASSWORD);
+        DataSourceProvider dataSourceProvider = new DataSourceProvider();
         DbUtils.setDataSource(dataSourceProvider.createDataSource());
         DbUtils.initializeSchema();
 
-        DbUtils.executeStatements(insertData);
-        DbUtils.executeStatementsInTransaction(insertData);
-        Object updatedRowsCount = DbUtils.executeStatementsInTransactionWithResult(updateData);
-        System.out.println("Number of Statements Updated: " + updatedRowsCount);
+        DbUtils.executeStatementsInTransaction(insertDataWithNestedTransaction);
+//        DbUtils.executeStatements(insertData);
+//        DbUtils.executeStatementsInTransaction(insertData);
+//        Object updatedRowsCount = DbUtils.executeStatementsInTransactionWithResult(updateData);
+//        System.out.println("Number of Statements Updated: " + updatedRowsCount);
         Object usersSet = DbUtils.executeStatementsInTransactionWithResult(selectData);
         for (String [] userInfo: (HashSet<String[]>) usersSet){
             System.out.println("Username: " + userInfo[0] + "\tEmail: " + userInfo[1]);

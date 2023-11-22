@@ -4,6 +4,8 @@ import javax.sql.DataSource;
 import java.io.IOException;
 import java.io.Reader;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 
 import org.apache.ibatis.io.Resources;
@@ -12,6 +14,9 @@ import org.apache.ibatis.jdbc.ScriptRunner;
 
 public class DbUtils {
     private static DataSource dataSource;
+    private static final ThreadLocal<Integer> transactionDepth = ThreadLocal.withInitial(() -> -1);
+    private static final ThreadLocal<Boolean> isTransactionSuccessful = new ThreadLocal<>();
+    private static Connection connection = null;
     private static final String SCHEMA = "schema.sql";
 
     @FunctionalInterface
@@ -59,20 +64,20 @@ public class DbUtils {
     }
 
     public static void executeStatementsInTransaction(ConnectionConsumer consumer) {
-        try (Connection connection = dataSource.getConnection()) {
-            connection.setAutoCommit(false);
+        try {
+            transactionDepth.set(transactionDepth.get() + 1);
+            if (transactionDepth.get() == 0) {
+                isTransactionSuccessful.set(true);
+                connection = dataSource.getConnection();
+                connection.setAutoCommit(false);
+            }
             try {
                 consumer.accept(connection);
-                connection.commit();
             } catch (SQLException ex) {
-                try {
-                    connection.rollback();
-                } catch (SQLException e) {
-                    throw new RuntimeException("error during rollback", e);
-                }
+                isTransactionSuccessful.set(false);
                 throw new RuntimeException("error during statement execution", ex);
             } finally {
-                connection.setAutoCommit(true);
+                completeTransaction();
             }
         } catch (SQLException e) {
             throw new RuntimeException("error during database connection", e);
@@ -81,24 +86,55 @@ public class DbUtils {
 
     public static <T> T executeStatementsInTransactionWithResult(ConnectionFunction<T> consumer) {
         T result;
-        try (Connection connection = dataSource.getConnection()) {
-            connection.setAutoCommit(false);
+        try {
+            transactionDepth.set(transactionDepth.get() + 1);
+            if (transactionDepth.get() == 0) {
+                isTransactionSuccessful.set(true);
+                connection = dataSource.getConnection();
+                connection.setAutoCommit(false);
+            }
             try {
                 result = consumer.apply(connection);
-                connection.commit();
             } catch (SQLException ex) {
-                try {
-                    connection.rollback();
-                } catch (SQLException e) {
-                    throw new RuntimeException("error during rollback", e);
-                }
+                isTransactionSuccessful.set(false);
                 throw new RuntimeException("error during statement execution", ex);
             } finally {
-                connection.setAutoCommit(true);
+                completeTransaction();
             }
         } catch (SQLException e) {
             throw new RuntimeException("error during database connection", e);
         }
         return result;
+    }
+
+    private static void completeTransaction() throws SQLException {
+        if (transactionDepth.get() == 0){
+            if (isTransactionSuccessful.get())
+                connection.commit();
+            else{
+                try {
+                    connection.rollback();
+                } catch (SQLException e) {
+                    throw new RuntimeException("error during rollback", e);
+                }
+            }
+            if(connection != null){
+                connection.setAutoCommit(true);
+                connection.close();
+            }
+        }
+        transactionDepth.set(transactionDepth.get() - 1);
+    }
+
+    private static void printConnections(Connection connection){
+        try (PreparedStatement pgActiveStatement = connection.prepareStatement("SELECT * FROM pg_stat_activity WHERE state = 'active'")) {
+            try (ResultSet resultSet = pgActiveStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    System.out.println(resultSet.getString("datname") + ' ' + resultSet.getString("pid"));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
