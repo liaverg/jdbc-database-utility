@@ -22,8 +22,11 @@ public class TestDBUtils {
     @Container
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 
+    private static final String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
+    private static final String updateSQL = "UPDATE users_directory.users SET email = ? WHERE username = ?";
+    private static final String selectSQL = "SELECT username, email FROM users_directory.users";
+
     private static final ConnectionConsumer successfulInsert = conn -> {
-        String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
         try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
             insertStatement.setString(1, "john_doe");
             insertStatement.setString(2, "john.doe@example.com");
@@ -35,7 +38,6 @@ public class TestDBUtils {
     };
 
     private static final ConnectionConsumer failedInsert = conn -> {
-        String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
         try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
             insertStatement.setString(1, "john_doe");
             insertStatement.setString(2, "john.doe@example.com");
@@ -45,7 +47,6 @@ public class TestDBUtils {
     };
 
     private static final ConnectionFunction successfulUpdate = conn -> {
-        String updateSQL = "UPDATE users_directory.users SET email = ? WHERE username = ?";
         try (PreparedStatement updateStatement = conn.prepareStatement(updateSQL)) {
             updateStatement.setString(1, "john.doe@gmail.com");
             updateStatement.setString(2, "john_doe");
@@ -58,7 +59,6 @@ public class TestDBUtils {
     };
 
     private static final ConnectionFunction failedUpdate = conn -> {
-        String updateSQL = "UPDATE users_directory.users SET email = ? WHERE username = ?";
         try (PreparedStatement updateStatement = conn.prepareStatement(updateSQL)) {
             updateStatement.setString(1, "john.doe@gmail.com");
             updateStatement.setString(2, "john_doe");
@@ -67,10 +67,85 @@ public class TestDBUtils {
         }
     };
 
+    private static final ConnectionConsumer successfulNestedInsert = conn -> {
+        DbUtils.executeStatementsInTransaction(successfulInsert);
+        try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
+            insertStatement.setString(1, "jake_doe");
+            insertStatement.setString(2, "jake.doe@example.com");
+            insertStatement.executeUpdate();
+        }
+    };
+
+    private static final ConnectionConsumer failedInnerInsert = conn -> {
+        DbUtils.executeStatementsInTransaction(failedInsert);
+        try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
+            insertStatement.setString(1, "jake_doe");
+            insertStatement.setString(2, "jake.doe@example.com");
+            insertStatement.executeUpdate();
+        }
+    };
+
+    private static final ConnectionConsumer failedOuterInsert = conn -> {
+        DbUtils.executeStatementsInTransaction(successfulInsert);
+        try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
+            insertStatement.setString(1, "jake_doe");
+            insertStatement.setString(2, "jake.doe@example.com");
+            insertStatement.executeUpdate();
+            throw new SQLException("Simulated exception during statement execution");
+        }
+    };
+
+    private static final ConnectionFunction successfulNestedUpdate = conn -> {
+        int updateStatementCount = (int) DbUtils.executeStatementsInTransactionWithResult(successfulUpdate);
+        try (PreparedStatement updateStatement = conn.prepareStatement(updateSQL)) {
+            updateStatement.setString(1, "jane.doe@outlook.com");
+            updateStatement.setString(2, "jane_doe");
+            updateStatementCount += updateStatement.executeUpdate();
+            return updateStatementCount;
+        }
+    };
+
+    private static final ConnectionFunction failedInnerUpdate = conn -> {
+        int updateStatementCount =  (int) DbUtils.executeStatementsInTransactionWithResult(failedUpdate);
+        try (PreparedStatement updateStatement = conn.prepareStatement(updateSQL)) {
+            updateStatement.setString(1, "jane.doe@outlook.com");
+            updateStatement.setString(2, "jane_doe");
+            updateStatementCount += updateStatement.executeUpdate();
+            return updateStatementCount;
+        }
+    };
+
+    private static final ConnectionFunction failedOuterUpdate = conn -> {
+        DbUtils.executeStatementsInTransactionWithResult(successfulUpdate);
+        try (PreparedStatement updateStatement = conn.prepareStatement(updateSQL)) {
+            updateStatement.setString(1, "jane.doe@outlook.com");
+            updateStatement.setString(2, "jane_doe");
+            updateStatement.executeUpdate();
+            throw new SQLException("Simulated exception during statement execution");
+        }
+    };
+
+
     private void assertUserRow(ResultSet resultSet, String expectedUsername, String expectedEmail) throws SQLException {
         assertTrue(resultSet.next(), "Expected another row in the ResultSet");
         assertEquals(expectedUsername, resultSet.getString("username"));
         assertEquals(expectedEmail, resultSet.getString("email"));
+    }
+
+    private boolean isConnectionOpen() throws SQLException {
+        int connectionCount = 0;
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            try (PreparedStatement pgActiveStatement = conn.prepareStatement("SELECT * FROM pg_stat_activity WHERE state = 'active'")) {
+                try (ResultSet resultSet = pgActiveStatement.executeQuery()) {
+                    while (resultSet.next()) {
+                        connectionCount++;
+                    }
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return connectionCount != 1;
     }
 
     @BeforeAll
@@ -99,7 +174,6 @@ public class TestDBUtils {
         assertDoesNotThrow(() -> DbUtils.executeStatements(successfulInsert));
 
         try (Connection conn = DbUtils.getDataSource().getConnection()) {
-            String selectSQL = "SELECT username, email FROM users_directory.users";
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -107,6 +181,8 @@ public class TestDBUtils {
                 }
             }
         }
+
+        assertFalse(isConnectionOpen());
     }
 
     @Test
@@ -114,7 +190,6 @@ public class TestDBUtils {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatements(failedInsert));
 
         try (Connection conn = DbUtils.getDataSource().getConnection()) {
-            String selectSQL = "SELECT username, email FROM users_directory.users";
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -122,6 +197,8 @@ public class TestDBUtils {
                 }
             }
         }
+
+        assertFalse(isConnectionOpen());
     }
 
     @Test
@@ -129,7 +206,6 @@ public class TestDBUtils {
         assertDoesNotThrow(() -> DbUtils.executeStatementsInTransaction(successfulInsert));
 
         try (Connection conn = DbUtils.getDataSource().getConnection()) {
-            String selectSQL = "SELECT username, email FROM users_directory.users";
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -137,6 +213,8 @@ public class TestDBUtils {
                 }
             }
         }
+
+        assertFalse(isConnectionOpen());
     }
 
     @Test
@@ -144,34 +222,26 @@ public class TestDBUtils {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransaction(failedInsert));
 
         try (Connection conn = DbUtils.getDataSource().getConnection()) {
-            String selectSQL = "SELECT username, email FROM users_directory.users";
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertFalse(resultSet.next());
                 }
             }
         }
+
+        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_return_update_count_when_in_transaction() throws Exception {
         try (Connection conn = DbUtils.getDataSource().getConnection()) {
-            String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
-            try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
-                insertStatement.setString(1, "john_doe");
-                insertStatement.setString(2, "john.doe@example.com");
-                insertStatement.executeUpdate();
-                insertStatement.setString(1, "jane_doe");
-                insertStatement.setString(2, "jane.doe@example.com");
-                insertStatement.executeUpdate();
-            }
+            successfulInsert.accept(conn);
         }
 
         Object updatedRowsCount = DbUtils.executeStatementsInTransactionWithResult(successfulUpdate);
         assertEquals(2, updatedRowsCount);
 
         try (Connection conn = DbUtils.getDataSource().getConnection()) {
-            String selectSQL = "SELECT username, email FROM users_directory.users";
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@gmail.com");
@@ -179,28 +249,134 @@ public class TestDBUtils {
                 }
             }
         }
+
+        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_fail_to_update_when_in_transaction() throws Exception {
         try (Connection conn = DbUtils.getDataSource().getConnection()) {
-            String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES ('john_doe', 'john.doe@example.com')";
-            try (PreparedStatement insertStatement = conn.prepareStatement(insertSQL)) {
-                insertStatement.executeUpdate();
-            }
+            successfulInsert.accept(conn);
         }
 
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransactionWithResult(failedUpdate));
 
         try (Connection conn = DbUtils.getDataSource().getConnection()) {
-            String selectSQL = "SELECT username, email FROM users_directory.users";
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
+                    assertUserRow(resultSet, "jane_doe", "jane.doe@example.com");
+                }
+            }
+        }
+
+        assertFalse(isConnectionOpen());
+    }
+
+    @Test
+    void should_insert_when_in_nested_transaction() throws Exception {
+        assertDoesNotThrow(() -> DbUtils.executeStatementsInTransaction(successfulNestedInsert));
+
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
+                try (ResultSet resultSet = selectStatement.executeQuery()) {
+                    assertUserRow(resultSet, "john_doe", "john.doe@example.com");
+                    assertUserRow(resultSet, "jane_doe", "jane.doe@example.com");
+                    assertUserRow(resultSet, "jake_doe", "jake.doe@example.com");
+                }
+            }
+        }
+
+        assertFalse(isConnectionOpen());
+    }
+
+    @Test
+    void should_fail_to_insert_when_inner_insert_fails_in_nested_transaction() throws Exception {
+        assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransaction(failedInnerInsert));
+
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
+                try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertFalse(resultSet.next());
                 }
             }
         }
+
+        assertFalse(isConnectionOpen());
     }
 
+    @Test
+    void should_fail_to_insert_when_outer_insert_fails_in_nested_transaction() throws Exception {
+        assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransaction(failedOuterInsert));
+
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
+                try (ResultSet resultSet = selectStatement.executeQuery()) {
+                    assertFalse(resultSet.next());
+                }
+            }
+        }
+
+        assertFalse(isConnectionOpen());
+    }
+
+    @Test
+    void should_return_update_count_when_in_nested_transaction() throws Exception {
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            successfulInsert.accept(conn);
+        }
+        Object updatedRowsCount = DbUtils.executeStatementsInTransactionWithResult(successfulNestedUpdate);
+        assertEquals(3, updatedRowsCount);
+
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
+                try (ResultSet resultSet = selectStatement.executeQuery()) {
+                    assertUserRow(resultSet, "john_doe", "john.doe@gmail.com");
+                    assertUserRow(resultSet, "jane_doe", "jane.doe@outlook.com");
+                }
+            }
+        }
+
+        assertFalse(isConnectionOpen());
+    }
+
+    @Test
+    void should_fail_to_update_when_inner_update_fails_in_nested_transaction() throws Exception {
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            successfulInsert.accept(conn);
+        }
+
+        assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransactionWithResult(failedInnerUpdate));
+
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
+                try (ResultSet resultSet = selectStatement.executeQuery()) {
+                    assertUserRow(resultSet, "john_doe", "john.doe@example.com");
+                    assertUserRow(resultSet, "jane_doe", "jane.doe@example.com");
+                }
+            }
+        }
+
+        assertFalse(isConnectionOpen());
+    }
+
+    @Test
+    void should_fail_to_update_when_outer_update_fails_in_nested_transaction() throws Exception {
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            successfulInsert.accept(conn);
+        }
+
+        assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransactionWithResult(failedOuterUpdate));
+
+        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+            try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
+                try (ResultSet resultSet = selectStatement.executeQuery()) {
+                    assertUserRow(resultSet, "john_doe", "john.doe@example.com");
+                    assertUserRow(resultSet, "jane_doe", "jane.doe@example.com");
+                }
+            }
+        }
+
+        assertFalse(isConnectionOpen());
+    }
 }
