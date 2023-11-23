@@ -9,6 +9,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -21,6 +22,8 @@ public class TestDBUtils {
 
     @Container
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
+
+    private static DataSource dataSource;
 
     private static final String insertSQL = "INSERT INTO users_directory.users (username, email) VALUES (?, ?)";
     private static final String updateSQL = "UPDATE users_directory.users SET email = ? WHERE username = ?";
@@ -134,7 +137,7 @@ public class TestDBUtils {
 
     private boolean isConnectionOpen() throws SQLException {
         int connectionCount = 0;
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement pgActiveStatement = conn.prepareStatement("SELECT * FROM pg_stat_activity WHERE state = 'active'")) {
                 try (ResultSet resultSet = pgActiveStatement.executeQuery()) {
                     while (resultSet.next()) {
@@ -155,13 +158,14 @@ public class TestDBUtils {
                 postgres.getUsername(),
                 postgres.getPassword()
         );
-        DbUtils.setDataSource(dataSourceProvider.createDataSource());
-        DbUtils.initializeSchema();
+        DbUtils.initializeDatabase(dataSourceProvider);
+        dataSource = dataSourceProvider.createDataSource();
     }
 
     @AfterEach
     void tearDown() throws Exception {
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        assertFalse(isConnectionOpen());
+        try (Connection conn = dataSource.getConnection()) {
             String truncateSQL = "TRUNCATE TABLE users_directory.users";
             try (PreparedStatement truncateStatement = conn.prepareStatement(truncateSQL)) {
                 truncateStatement.executeUpdate();
@@ -173,7 +177,7 @@ public class TestDBUtils {
     void should_insert_when_autocommit_on() throws Exception {
         assertDoesNotThrow(() -> DbUtils.executeStatements(successfulInsert));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -181,15 +185,13 @@ public class TestDBUtils {
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_insert_data_only_from_successful_operations_when_autocommit_on() throws Exception {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatements(failedInsert));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -197,15 +199,13 @@ public class TestDBUtils {
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_insert_when_in_transaction() throws Exception {
         assertDoesNotThrow(() -> DbUtils.executeStatementsInTransaction(successfulInsert));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -213,35 +213,31 @@ public class TestDBUtils {
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_fail_to_insert_when_in_transaction() throws Exception {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransaction(failedInsert));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertFalse(resultSet.next());
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_return_update_count_when_in_transaction() throws Exception {
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             successfulInsert.accept(conn);
         }
 
         Object updatedRowsCount = DbUtils.executeStatementsInTransactionWithResult(successfulUpdate);
         assertEquals(2, updatedRowsCount);
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@gmail.com");
@@ -249,19 +245,17 @@ public class TestDBUtils {
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_fail_to_update_when_in_transaction() throws Exception {
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             successfulInsert.accept(conn);
         }
 
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransactionWithResult(failedUpdate));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -269,15 +263,13 @@ public class TestDBUtils {
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_insert_when_in_nested_transaction() throws Exception {
         assertDoesNotThrow(() -> DbUtils.executeStatementsInTransaction(successfulNestedInsert));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -286,49 +278,43 @@ public class TestDBUtils {
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_fail_to_insert_when_inner_insert_fails_in_nested_transaction() throws Exception {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransaction(failedInnerInsert));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertFalse(resultSet.next());
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_fail_to_insert_when_outer_insert_fails_in_nested_transaction() throws Exception {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransaction(failedOuterInsert));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertFalse(resultSet.next());
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_return_update_count_when_in_nested_transaction() throws Exception {
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             successfulInsert.accept(conn);
         }
         Object updatedRowsCount = DbUtils.executeStatementsInTransactionWithResult(successfulNestedUpdate);
         assertEquals(3, updatedRowsCount);
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@gmail.com");
@@ -336,19 +322,17 @@ public class TestDBUtils {
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_fail_to_update_when_inner_update_fails_in_nested_transaction() throws Exception {
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             successfulInsert.accept(conn);
         }
 
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransactionWithResult(failedInnerUpdate));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -356,19 +340,17 @@ public class TestDBUtils {
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 
     @Test
     void should_fail_to_update_when_outer_update_fails_in_nested_transaction() throws Exception {
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             successfulInsert.accept(conn);
         }
 
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransactionWithResult(failedOuterUpdate));
 
-        try (Connection conn = DbUtils.getDataSource().getConnection()) {
+        try (Connection conn = dataSource.getConnection()) {
             try (PreparedStatement selectStatement = conn.prepareStatement(selectSQL)) {
                 try (ResultSet resultSet = selectStatement.executeQuery()) {
                     assertUserRow(resultSet, "john_doe", "john.doe@example.com");
@@ -376,7 +358,5 @@ public class TestDBUtils {
                 }
             }
         }
-
-        assertFalse(isConnectionOpen());
     }
 }
