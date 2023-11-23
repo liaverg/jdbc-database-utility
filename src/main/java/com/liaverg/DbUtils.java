@@ -1,15 +1,11 @@
 package com.liaverg;
 
-
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-
 
 public class DbUtils {
     private static DataSource dataSource;
@@ -27,16 +23,12 @@ public class DbUtils {
         T apply(Connection connection) throws SQLException;
     }
 
-    public static void setDataSource(DataSource dataSource) {
-        DbUtils.dataSource = dataSource;
+    public static void initializeDatabase(DataSourceProvider dataSourceProvider){
+        dataSource = dataSourceProvider.createDataSource();
+        initializeSchema();
     }
 
-    public static DataSource getDataSource() {
-        return dataSource;
-    }
-
-
-    public static void initializeSchema() {
+    private static void initializeSchema() {
         try (Connection connection = dataSource.getConnection()) {
             ScriptUtils.executeSqlScript(connection, new FileSystemResource("src/main/resources/schema.sql"));
         } catch (SQLException e) {

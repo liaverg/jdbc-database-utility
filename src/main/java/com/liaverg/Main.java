@@ -61,9 +61,7 @@ public class Main {
     };
 
     public static void main(String[] args) {
-        DataSourceProvider dataSourceProvider = new DataSourceProvider();
-        DbUtils.setDataSource(dataSourceProvider.createDataSource());
-        DbUtils.initializeSchema();
+        DbUtils.initializeDatabase(new DataSourceProvider());
 
         DbUtils.executeStatementsInTransaction(insertDataWithNestedTransaction);
 //        DbUtils.executeStatements(insertData);
