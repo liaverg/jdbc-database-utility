@@ -1,17 +1,21 @@
 package com.liaverg;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 
 public class DbUtils {
     private static DataSource dataSource;
-    private static final ThreadLocal<Integer> transactionDepth = ThreadLocal.withInitial(() -> -1);
-    private static final ThreadLocal<Boolean> isTransactionSuccessful = new ThreadLocal<>();
-    private static Connection connection = null;
+    private static final ThreadLocal<Connection> connection = ThreadLocal.withInitial(() -> null);
+    private static final ThreadLocal<Boolean> isTransactionSuccessful = ThreadLocal.withInitial(() -> true);
+    public static final Logger log = LoggerFactory.getLogger(DbUtils.class);
 
     @FunctionalInterface
     public interface ConnectionConsumer {
@@ -24,6 +28,7 @@ public class DbUtils {
     }
 
     public static void initializeDatabase(DataSourceProvider dataSourceProvider){
+        log.info("Initializing database {}", LocalDateTime.now());
         dataSource = dataSourceProvider.createDataSource();
         initializeSchema();
     }
@@ -32,82 +37,121 @@ public class DbUtils {
         try (Connection connection = dataSource.getConnection()) {
             ScriptUtils.executeSqlScript(connection, new FileSystemResource("src/main/resources/schema.sql"));
         } catch (SQLException e) {
+            log.info("Exception thrown during database connection");
             throw new RuntimeException("error during database connection", e);
         }
     }
 
     public static void executeStatements(ConnectionConsumer consumer) {
+        log.info("Connecting to the database");
         try (Connection connection = dataSource.getConnection()) {
             try {
+                log.info("Executing statements");
                 consumer.accept(connection);
             } catch (SQLException ex) {
+                log.info("Exception thrown during execution");
                 throw new RuntimeException("error during statement execution", ex);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("error during database connection", e);
+            handleConnectionException(e);
         }
+        log.info("Closed connection to the database");
     }
 
     public static void executeStatementsInTransaction(ConnectionConsumer consumer) {
+        boolean isOuterTransaction = false;
+
         try {
-            transactionDepth.set(transactionDepth.get() + 1);
-            if (transactionDepth.get() == 0) {
-                isTransactionSuccessful.set(true);
-                connection = dataSource.getConnection();
-                connection.setAutoCommit(false);
+            if (!isTransactionActive()) {
+                isOuterTransaction = true;
+                startTransaction();
             }
+
             try {
-                consumer.accept(connection);
+                log.info("Executing statements");
+                consumer.accept(connection.get());
             } catch (SQLException ex) {
-                isTransactionSuccessful.set(false);
-                throw new RuntimeException("error during statement execution", ex);
+                handleTransactionException(ex);
             } finally {
-                completeTransaction();
+                if (isOuterTransaction) {
+                    completeOuterTransaction();
+                }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("error during database connection", e);
+            handleConnectionException(e);
         }
     }
 
     public static <T> T executeStatementsInTransactionWithResult(ConnectionFunction<T> consumer) {
-        T result;
+        T result = null;
+        boolean isOuterTransaction = false;
         try {
-            transactionDepth.set(transactionDepth.get() + 1);
-            if (transactionDepth.get() == 0) {
-                isTransactionSuccessful.set(true);
-                connection = dataSource.getConnection();
-                connection.setAutoCommit(false);
+            if (!isTransactionActive()) {
+                isOuterTransaction = true;
+                startTransaction();
             }
+
             try {
-                result = consumer.apply(connection);
+                log.info("Executing statements");
+                result = consumer.apply(connection.get());
             } catch (SQLException ex) {
-                isTransactionSuccessful.set(false);
-                throw new RuntimeException("error during statement execution", ex);
+                handleTransactionException(ex);
             } finally {
-                completeTransaction();
+                if (isOuterTransaction) {
+                    completeOuterTransaction();
+                }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("error during database connection", e);
+            handleConnectionException(e);
         }
         return result;
     }
 
-    private static void completeTransaction() throws SQLException {
-        if (transactionDepth.get() == 0){
-            if (isTransactionSuccessful.get())
-                connection.commit();
-            else{
-                try {
-                    connection.rollback();
-                } catch (SQLException e) {
-                    throw new RuntimeException("error during rollback", e);
-                }
+    private static boolean isTransactionActive() throws SQLException {
+        return connection.get() != null;
+    }
+
+    private static void startTransaction() throws SQLException {
+        log.info("Connecting to the database");
+        isTransactionSuccessful.set(true);
+        connection.set(dataSource.getConnection());
+        connection.get().setAutoCommit(false);
+    }
+
+    private static void completeOuterTransaction() throws SQLException {
+        log.info("Finally block executed for outer transaction");
+        try {
+            if (isTransactionSuccessful.get()) {
+                log.info("Committing statements");
+                connection.get().commit();
+            } else {
+                log.info("Rolling back statements");
+                connection.get().rollback();
             }
-            if(connection != null){
-                connection.setAutoCommit(true);
-                connection.close();
-            }
+        } finally {
+            releaseResources();
         }
-        transactionDepth.set(transactionDepth.get() - 1);
+    }
+
+    private static void handleTransactionException(SQLException ex) {
+        log.info("Exception thrown during execution");
+        isTransactionSuccessful.set(false);
+        throw new RuntimeException("Error during statement execution", ex);
+    }
+
+    private static void handleConnectionException(SQLException e) {
+        log.info("Exception thrown during database connection");
+        throw new RuntimeException("Error during database connection", e);
+    }
+
+    private static void releaseResources() throws SQLException {
+        log.info("Releasing resources");
+        if (connection.get() != null) {
+            log.info("Closing connection to the database");
+            connection.get().setAutoCommit(true);
+            connection.get().close();
+            connection.remove();
+        }
+        log.info("Resources released");
     }
 }
