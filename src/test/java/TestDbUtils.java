@@ -40,12 +40,7 @@ public class TestDbUtils {
     @AfterEach
     void tearDown() throws Exception {
         assertFalse(isConnectionOpen());
-        try (Connection conn = dataSource.getConnection()) {
-            String truncateSQL = "TRUNCATE TABLE users_directory.users";
-            try (PreparedStatement truncateStatement = conn.prepareStatement(truncateSQL)) {
-                truncateStatement.executeUpdate();
-            }
-        }
+        truncateTable();
     }
 
     private boolean isConnectionOpen() throws SQLException {
@@ -62,6 +57,15 @@ public class TestDbUtils {
             }
         }
         return connectionCount != 1;
+    }
+
+    private void truncateTable() throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            String truncateSQL = "TRUNCATE TABLE users_directory.users";
+            try (PreparedStatement truncateStatement = conn.prepareStatement(truncateSQL)) {
+                truncateStatement.executeUpdate();
+            }
+        }
     }
 
     private void insertTwoRecords(String username1, String email1,
