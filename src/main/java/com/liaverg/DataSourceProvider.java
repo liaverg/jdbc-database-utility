@@ -2,9 +2,6 @@ package com.liaverg;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import org.postgresql.ds.PGSimpleDataSource;
-
-import javax.sql.DataSource;
 
 public class DataSourceProvider {
     private final String url;
@@ -37,14 +34,8 @@ public class DataSourceProvider {
         config.setJdbcUrl(url);
         config.setUsername(username);
         config.setPassword(password);
+        config.setLeakDetectionThreshold(3000);
+        config.setMaximumPoolSize(10);
         return new HikariDataSource(config);
-    }
-
-    public DataSource createDataSource() {
-        PGSimpleDataSource pg_dataSource = new PGSimpleDataSource();
-        pg_dataSource.setURL(url);
-        pg_dataSource.setUser(username);
-        pg_dataSource.setPassword(password);
-        return pg_dataSource;
     }
 }
