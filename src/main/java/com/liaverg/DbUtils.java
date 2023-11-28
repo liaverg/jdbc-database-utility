@@ -1,18 +1,18 @@
 package com.liaverg;
 
+import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 
 public class DbUtils {
-    private static DataSource dataSource;
+    private static HikariDataSource dataSource;
     private static final ThreadLocal<Connection> connection = ThreadLocal.withInitial(() -> null);
     private static final ThreadLocal<Boolean> isTransactionSuccessful = ThreadLocal.withInitial(() -> true);
     public static final Logger log = LoggerFactory.getLogger(DbUtils.class);
@@ -27,9 +27,15 @@ public class DbUtils {
         T apply(Connection connection) throws SQLException;
     }
 
-    public static void initializeDatabase(DataSourceProvider dataSourceProvider){
+    public static void initializeDatabase(DataSourceProvider dataSourceProvider) {
         log.info("Initializing database {}", LocalDateTime.now());
-        dataSource = dataSourceProvider.createDataSource();
+        if (dataSourceProvider.isDataSourceProviderInitialized()) {
+            log.info("Initialize from fields of datasource");
+            dataSource = dataSourceProvider.createHikariDataSource();
+        } else {
+            log.info("Initialize from properties");
+            dataSource = dataSourceProvider.createHikariDataSourceFromProperties();
+        }
         initializeSchema();
     }
 

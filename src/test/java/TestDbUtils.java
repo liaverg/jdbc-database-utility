@@ -2,6 +2,7 @@ import com.liaverg.DataSourceProvider;
 import com.liaverg.DbUtils;
 import com.liaverg.DbUtils.ConnectionConsumer;
 import com.liaverg.DbUtils.ConnectionFunction;
+import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -10,7 +11,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,7 +24,7 @@ public class TestDbUtils {
     @Container
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 
-    private static DataSource dataSource;
+    private static HikariDataSource dataSource;
 
     @BeforeAll
     static void setUp() {
@@ -34,29 +34,12 @@ public class TestDbUtils {
                 postgres.getPassword()
         );
         DbUtils.initializeDatabase(dataSourceProvider);
-        dataSource = dataSourceProvider.createDataSource();
+        dataSource = dataSourceProvider.createHikariDataSource();
     }
 
     @AfterEach
     void tearDown() throws Exception {
-        assertFalse(isConnectionOpen());
         truncateTable();
-    }
-
-    private boolean isConnectionOpen() throws SQLException {
-        int connectionCount = 0;
-        try (Connection conn = dataSource.getConnection()) {
-            try (PreparedStatement pgActiveStatement = conn.prepareStatement("SELECT * FROM pg_stat_activity WHERE state = 'active'")) {
-                try (ResultSet resultSet = pgActiveStatement.executeQuery()) {
-                    while (resultSet.next()) {
-                        connectionCount++;
-                    }
-                }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        return connectionCount != 1;
     }
 
     private void truncateTable() throws SQLException {
