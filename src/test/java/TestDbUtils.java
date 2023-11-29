@@ -2,7 +2,6 @@ import com.liaverg.DataSourceProvider;
 import com.liaverg.DbUtils;
 import com.liaverg.DbUtils.ConnectionConsumer;
 import com.liaverg.DbUtils.ConnectionFunction;
-import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +10,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,7 +24,7 @@ public class TestDbUtils {
     @Container
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 
-    private static HikariDataSource dataSource;
+    private static DataSource dataSource;
 
     @BeforeAll
     static void setUp() {
