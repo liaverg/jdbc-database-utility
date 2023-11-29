@@ -4,7 +4,7 @@ provides central control of database connection lifecycle and usage.
 
 ### Before You Start
 Make sure that you configure the properties in the 
-`src\main\java\resources\database.properties` so that they match your settings.  
+`src\main\java\resources\datasource.properties` so that they match your settings.  
 
 The database schema generation is automated. 
 
