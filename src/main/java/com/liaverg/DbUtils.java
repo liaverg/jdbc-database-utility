@@ -112,11 +112,9 @@ public class DbUtils {
                 connection.get().rollback();
             }
         } finally {
-            if (connection.get() != null) {
-                connection.get().setAutoCommit(true);
-                connection.get().close();
-                connection.remove();
-            }
+            connection.get().setAutoCommit(true);
+            connection.get().close();
+            connection.remove();
         }
     }
 }
