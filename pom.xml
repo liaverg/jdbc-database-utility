@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.liaverg</groupId>
-    <artifactId>jdbc-tutorial-database-utility-class</artifactId>
+    <artifactId>jdbc-database-utility</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
@@ -51,6 +51,7 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
             <version>1.18.3</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
