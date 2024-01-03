@@ -1,4 +1,4 @@
-package com.liaverg;
+package com.liaverg.config;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -12,23 +12,20 @@ public class DataSourceProvider {
     private final String username;
     private final String password;
     private final int leakDetectionThreshold;
+    private final HikariDataSource hikariDataSource;
+    private  final DataSource hikariProxyDataSource;
 
-    public DataSourceProvider(String url, String username, String password) {
+    public DataSourceProvider(String url, String username, String password,
+                              int leakDetectionThreshold) {
         this.url = url;
         this.username = username;
         this.password = password;
-        this.leakDetectionThreshold = 3000;
+        this.leakDetectionThreshold = leakDetectionThreshold;
+        hikariDataSource = createHikariDataSource();
+        hikariProxyDataSource = createHikariProxyDataSource();
     }
 
-    public DataSourceProvider() {
-        PropertiesReader propertiesReader = new PropertiesReader();
-        this.url = propertiesReader.getJdbcUrl();
-        this.username = propertiesReader.getUser();
-        this.password = propertiesReader.getPassword();
-        this.leakDetectionThreshold = propertiesReader.getLeakDetectionThreshold();
-    }
-
-    public HikariDataSource createHikariDataSource() {
+    private HikariDataSource createHikariDataSource() {
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(url);
         config.setUsername(username);
@@ -37,10 +34,9 @@ public class DataSourceProvider {
         return new HikariDataSource(config);
     }
 
-    public DataSource createHikariProxyDataSource() {
-        HikariDataSource dataSource = createHikariDataSource();
+    private DataSource createHikariProxyDataSource() {
         return ProxyDataSourceBuilder
-                .create(dataSource)
+                .create(hikariDataSource)
                 .name(url)
                 .logQueryBySlf4j(SLF4JLogLevel.INFO)
                 .multiline()
@@ -49,5 +45,11 @@ public class DataSourceProvider {
                 .build();
     }
 
+    public HikariDataSource getHikariDataSource() {
+        return hikariDataSource;
+    }
 
+    public DataSource getHikariProxyDataSource() {
+        return hikariProxyDataSource;
+    }
 }

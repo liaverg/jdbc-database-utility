@@ -1,7 +1,4 @@
-package com.liaverg;
-
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.jdbc.datasource.init.ScriptUtils;
+package com.liaverg.utilities;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -12,6 +9,10 @@ public class DbUtils {
     private static final ThreadLocal<Connection> connection = ThreadLocal.withInitial(() -> null);
     private static final ThreadLocal<Boolean> isTransactionSuccessful = ThreadLocal.withInitial(() -> true);
 
+    public DbUtils(DataSource dataSource){
+        this.dataSource = dataSource;
+    }
+
     @FunctionalInterface
     public interface ConnectionConsumer {
         void accept(Connection connection) throws SQLException;
@@ -20,19 +21,6 @@ public class DbUtils {
     @FunctionalInterface
     public interface ConnectionFunction<T> {
         T apply(Connection connection) throws SQLException;
-    }
-
-    public static void initializeDatabase(DataSourceProvider dataSourceProvider) {
-        dataSource = dataSourceProvider.createHikariProxyDataSource();
-        initializeSchema();
-    }
-
-    private static void initializeSchema() {
-        try (Connection connection = dataSource.getConnection()) {
-            ScriptUtils.executeSqlScript(connection, new FileSystemResource("src/main/resources/schema.sql"));
-        } catch (SQLException e) {
-            throw new RuntimeException("error during database connection", e);
-        }
     }
 
     public static void executeStatements(ConnectionConsumer consumer) {

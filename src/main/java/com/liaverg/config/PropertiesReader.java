@@ -1,10 +1,11 @@
-package com.liaverg;
+package com.liaverg.config;
 import java.io.IOException;
 import java.util.Properties;
 import java.net.URL;
 
 public class PropertiesReader {
     private final Properties properties;
+    private static final String DATASOURCE_PROPERTIES_FILE = "datasource.properties";
 
     public PropertiesReader() {
         this.properties = new Properties();
@@ -12,13 +13,12 @@ public class PropertiesReader {
     }
 
     private void readProperties(){
-        URL url = ClassLoader.getSystemResource("datasource.properties");
+        URL url = ClassLoader.getSystemResource(DATASOURCE_PROPERTIES_FILE);
         try {
             properties.load(url.openStream());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
     }
 
     public String getJdbcUrl() {
