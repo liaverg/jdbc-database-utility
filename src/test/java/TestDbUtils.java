@@ -1,7 +1,8 @@
-import com.liaverg.DataSourceProvider;
-import com.liaverg.DbUtils;
-import com.liaverg.DbUtils.ConnectionConsumer;
-import com.liaverg.DbUtils.ConnectionFunction;
+import com.liaverg.config.AppConfig;
+import com.liaverg.config.DataSourceProvider;
+import com.liaverg.utilities.DbUtils;
+import com.liaverg.utilities.DbUtils.ConnectionConsumer;
+import com.liaverg.utilities.DbUtils.ConnectionFunction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -28,13 +29,11 @@ public class TestDbUtils {
 
     @BeforeAll
     static void setUp() {
-        DataSourceProvider dataSourceProvider = new DataSourceProvider(
+        AppConfig appConfig = new AppConfig(
                 postgres.getJdbcUrl(),
                 postgres.getUsername(),
-                postgres.getPassword()
-        );
-        DbUtils.initializeDatabase(dataSourceProvider);
-        dataSource = dataSourceProvider.createHikariDataSource();
+                postgres.getPassword());
+        dataSource = appConfig.getHikariDataSource();
     }
 
     @AfterEach
@@ -102,7 +101,7 @@ public class TestDbUtils {
         }
     }
 
-   private void assertUserRow(ResultSet resultSet, String expectedUsername, String expectedEmail) throws SQLException {
+    private void assertUserRow(ResultSet resultSet, String expectedUsername, String expectedEmail) throws SQLException {
         assertTrue(resultSet.next(), "Expected another row in the ResultSet");
         assertEquals(expectedUsername, resultSet.getString("username"));
         assertEquals(expectedEmail, resultSet.getString("email"));
@@ -119,7 +118,7 @@ public class TestDbUtils {
         assertDoesNotThrow(() -> DbUtils.executeStatements(successfulInsert));
 
         verifyTwoRecordsInTheDatabase("john_doe", "john.doe@example.com",
-                                    "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
     }
 
     @Test
@@ -134,7 +133,7 @@ public class TestDbUtils {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatements(insertWithSimulatedError));
 
         verifyTwoRecordsInTheDatabase("john_doe", "john.doe@example.com",
-                                        "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
     }
 
     @Test
@@ -148,7 +147,7 @@ public class TestDbUtils {
         assertDoesNotThrow(() -> DbUtils.executeStatementsInTransaction(successfulInsert));
 
         verifyTwoRecordsInTheDatabase("john_doe", "john.doe@example.com",
-                                        "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
     }
 
     @Test
@@ -169,7 +168,7 @@ public class TestDbUtils {
     @DisplayName("Successful Update in Transaction")
     void should_return_count_of_updated_records_when_in_transaction() throws Exception {
         insertTwoRecords("john_doe", "john.doe@example.com",
-                        "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
         ConnectionFunction successfulUpdate = conn -> {
             int updateCount = 0;
             updateCount += updateUser(conn, "john_doe", "john.doe@gmail.com");
@@ -181,14 +180,14 @@ public class TestDbUtils {
         assertEquals(2, updatedRowsCount);
 
         verifyTwoRecordsInTheDatabase("john_doe", "john.doe@gmail.com",
-                                        "jane_doe", "jane.doe@gmail.com");
+                "jane_doe", "jane.doe@gmail.com");
     }
 
     @Test
     @DisplayName("Failed Update in Transaction")
     void should_fail_to_update_when_in_transaction() throws Exception {
         insertTwoRecords("john_doe", "john.doe@example.com",
-                        "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
         ConnectionFunction failedUpdate = conn -> {
             updateUser(conn, "john_doe", "john.doe@gmail.com");
             updateUser(conn, "jane_doe", "jane.doe@gmail.com");
@@ -198,7 +197,7 @@ public class TestDbUtils {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransactionWithResult(failedUpdate));
 
         verifyTwoRecordsInTheDatabase("john_doe", "john.doe@example.com",
-                                        "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
     }
 
     @Test
@@ -213,7 +212,7 @@ public class TestDbUtils {
         assertDoesNotThrow(() -> DbUtils.executeStatementsInTransaction(successfulNestedInsert));
 
         verifyTwoRecordsInTheDatabase("john_doe", "john.doe@example.com",
-                                        "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
     }
 
     @Test
@@ -250,7 +249,7 @@ public class TestDbUtils {
     @DisplayName("Successful Update in Nested Transactions")
     void should_return_count_of_updated_records_when_in_nested_transactions() throws Exception {
         insertTwoRecords("john_doe", "john.doe@example.com",
-                        "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
         ConnectionFunction successfulNestedUpdate = conn -> {
             int updateCount = 0;
             updateCount += DbUtils.executeStatementsInTransactionWithResult(connection ->
@@ -263,14 +262,14 @@ public class TestDbUtils {
         assertEquals(2, updatedRowsCount);
 
         verifyTwoRecordsInTheDatabase("john_doe", "john.doe@gmail.com",
-                                    "jane_doe", "jane.doe@gmail.com");
+                "jane_doe", "jane.doe@gmail.com");
     }
 
     @Test
     @DisplayName("Failed Inner Update in Nested Transactions")
     void should_fail_to_update_when_inner_update_fails_in_nested_transactions() throws Exception {
         insertTwoRecords("john_doe", "john.doe@example.com",
-                        "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
         ConnectionFunction failedInnerUpdate = conn -> {
             DbUtils.executeStatementsInTransactionWithResult(connection -> {
                 updateUser(connection, "john_doe", "john.doe@gmail.com");
@@ -282,14 +281,14 @@ public class TestDbUtils {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransactionWithResult(failedInnerUpdate));
 
         verifyTwoRecordsInTheDatabase("john_doe", "john.doe@example.com",
-                                    "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
     }
 
     @Test
     @DisplayName("Failed Outer Update in Nested Transactions")
     void should_fail_to_update_when_outer_update_fails_in_nested_transactions() throws Exception {
         insertTwoRecords("john_doe", "john.doe@example.com",
-                    "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
         ConnectionFunction failedOuterUpdate = conn -> {
             DbUtils.executeStatementsInTransactionWithResult(connection ->
                     updateUser(connection, "john_doe", "john.doe@gmail.com"));
@@ -300,6 +299,6 @@ public class TestDbUtils {
         assertThrows(RuntimeException.class, () -> DbUtils.executeStatementsInTransactionWithResult(failedOuterUpdate));
 
         verifyTwoRecordsInTheDatabase("john_doe", "john.doe@example.com",
-                                    "jane_doe", "jane.doe@example.com");
+                "jane_doe", "jane.doe@example.com");
     }
 }

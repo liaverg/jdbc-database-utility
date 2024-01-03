@@ -1,7 +1,10 @@
 package com.liaverg;
 
-import com.liaverg.DbUtils.ConnectionConsumer;
-import com.liaverg.DbUtils.ConnectionFunction;
+import com.liaverg.config.AppConfig;
+import com.liaverg.utilities.DbUtils;
+import com.liaverg.utilities.DbUtils.ConnectionConsumer;
+import com.liaverg.utilities.DbUtils.ConnectionFunction;
+import com.liaverg.config.DataSourceProvider;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -64,7 +67,7 @@ public class Main {
     };
 
     public static void main(String[] args) {
-        DbUtils.initializeDatabase(new DataSourceProvider());
+        AppConfig appConfig = new AppConfig();
 
         DbUtils.executeStatementsInTransaction(insertUsersWithNestedTransaction);
 //        DbUtils.executeStatements(insertUsers);
