@@ -2,10 +2,9 @@
 The project provides a custom utility class that simplifies database operations and 
 provides central control of database connection lifecycle and usage.
 
+It is lightweight since it uses only the JDBC API.
+
 ### Before You Start
-Make sure that you configure the properties in the 
-`src\main\java\resources\datasource.properties` so that they match your settings.  
+Docker is Required.
 
-The database schema generation is automated. 
-
-Testcontainers are used for testing, therefore you should have Docker open for running the tests.  
+Run `docker-compose.yaml` to generate the database. 
