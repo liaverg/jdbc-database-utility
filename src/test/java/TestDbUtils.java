@@ -1,4 +1,3 @@
-import com.liaverg.config.AppConfig;
 import com.liaverg.config.DataSourceProvider;
 import com.liaverg.utilities.DbUtils;
 import com.liaverg.utilities.DbUtils.ConnectionConsumer;
@@ -23,17 +22,22 @@ import static org.junit.jupiter.api.Assertions.*;
 public class TestDbUtils {
 
     @Container
-    private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
+    private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16")
+            .withInitScript("init.sql");
 
     private static DataSource dataSource;
+    private static final int LEAK_DETECTION_THRESHOLD = 3000;
 
     @BeforeAll
     static void setUp() {
-        AppConfig appConfig = new AppConfig(
+        DataSourceProvider dataSourceProvider = new DataSourceProvider(
                 postgres.getJdbcUrl(),
                 postgres.getUsername(),
-                postgres.getPassword());
-        dataSource = appConfig.getHikariDataSource();
+                postgres.getPassword(),
+                LEAK_DETECTION_THRESHOLD
+        );
+        new DbUtils(dataSourceProvider.getHikariProxyDataSource());
+        dataSource = dataSourceProvider.getHikariDataSource();
     }
 
     @AfterEach
