@@ -28,7 +28,7 @@ public class DbUtils {
             try {
                 consumer.accept(connection);
             } catch (SQLException ex) {
-                throw new RuntimeException("error during statement execution", ex);
+                throw new RuntimeException("Error during statement execution", ex);
             }
         } catch (SQLException e) {
             throw new RuntimeException("Error during database connection", e);
